@@ -1,0 +1,12 @@
+# Fichiers sensibles
+   .env
+
+   # Dossier des dépendances Node.js
+   node_modules/
+
+   # Logs
+   npm-debug.log*
+   yarn-debug.log*
+   yarn-error.log*
+
+   .idea

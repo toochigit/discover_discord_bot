@@ -1,9 +1,10 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
-const { Client, Collection, GatewayIntentBits } = require('discord.js');
+const { Client, Collection, GatewayIntentBits, REST, Routes } = require('discord.js');
 const express = require('express');
 
+// Configuration du client Discord.js
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -12,7 +13,7 @@ const client = new Client({
     ]
 });
 
-// Configuration du serveur Express pour éviter la déconnexion sur Render
+// Configuration Express pour Render
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -24,7 +25,7 @@ app.listen(port, () => {
     console.log(`Serveur web démarré sur le port ${port}`);
 });
 
-// Commandes texte classiques (!ping)
+// Charger les commandes message
 client.messageCommands = new Collection();
 const msgCommandPath = path.join(__dirname, 'commands/message');
 fs.readdirSync(msgCommandPath).forEach(file => {
@@ -32,7 +33,7 @@ fs.readdirSync(msgCommandPath).forEach(file => {
     client.messageCommands.set(command.name, command);
 });
 
-// Commandes slash (/ping)
+// Charger les commandes slash
 client.slashCommands = new Collection();
 const slashCommandPath = path.join(__dirname, 'commands/slash');
 fs.readdirSync(slashCommandPath).forEach(file => {
@@ -40,16 +41,28 @@ fs.readdirSync(slashCommandPath).forEach(file => {
     client.slashCommands.set(command.data.name, command);
 });
 
-client.once('ready', () => {
-    console.log(`Bot connecté en tant que ${client.user.tag}`);
+// ⚡ Déployer les commandes slash au démarrage
+const commands = [];
+fs.readdirSync(slashCommandPath).forEach(file => {
+    const command = require(`./commands/slash/${file}`);
+    commands.push(command.data.toJSON());
+});
 
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-    function keepAlive() {
-        console.log("Bot ping de maintenance - " + new Date().toISOString());
+client.once('ready', async () => {
+    console.log(`✅ Bot connecté en tant que ${client.user.tag}`);
+
+    try {
+        console.log('🔄 Déploiement des commandes slash en cours...');
+        await rest.put(
+            Routes.applicationCommands(process.env.CLIENT_ID),
+            { body: commands },
+        );
+        console.log('✅ Les commandes slash ont été déployées avec succès.');
+    } catch (error) {
+        console.error('❌ Une erreur est survenue lors du déploiement des commandes :', error);
     }
-
-    // Exécuter la fonction keepAlive toutes les 5 minutes
-    setInterval(keepAlive, 300000);
 });
 
 client.on('messageCreate', (message) => {
@@ -68,7 +81,7 @@ client.on('interactionCreate', async (interaction) => {
             await command.execute(interaction);
         } catch (err) {
             console.error(err);
-            await interaction.reply({ content: 'Erreur lors de l’exécution de la commande.', ephemeral: true });
+            await interaction.reply({ content: '❌ Erreur lors de l\'exécution de la commande.', ephemeral: true });
         }
     }
 });
